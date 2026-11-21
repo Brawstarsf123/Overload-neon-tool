@@ -1,0 +1,282 @@
+
+-- NEON OVERLORD X | DELTA EDITION
+-- Local movement and visual tools
+-- Spin test is local only.
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+local saved = {}
+local flying, boosted, espOn, tpOn, spinning = false, false, false, false, false
+local flySpeed, walkSpeed, spinSpeed = 60, 32, 35
+local selectedPlayer
+local highlights = {}
+local angle = 0
+
+local old = game:GetService("CoreGui"):FindFirstChild("NeonOverlordX")
+if old then old:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "NeonOverlordX"
+gui.ResetOnSpawn = false
+gui.Parent = game:GetService("CoreGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(310, 490)
+frame.Position = UDim2.new(.04, 0, .18, 0)
+frame.BackgroundColor3 = Color3.fromRGB(12, 9, 25)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
+local outline = Instance.new("UIStroke", frame)
+outline.Color = Color3.fromRGB(155, 55, 255)
+outline.Thickness = 2
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 0, 45)
+title.Position = UDim2.fromOffset(12, 0)
+title.BackgroundTransparency = 1
+title.Text = "✦ NEON OVERLORD X"
+title.TextColor3 = Color3.fromRGB(210, 160, 255)
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 18
+title.Parent = frame
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(32, 30)
+close.Position = UDim2.new(1, -40, 0, 7)
+close.Text = "×"
+close.TextSize = 22
+close.TextColor3 = Color3.new(1,1,1)
+close.BackgroundColor3 = Color3.fromRGB(110, 25, 150)
+close.Parent = frame
+Instance.new("UICorner", close)
+
+-- Drag window
+local dragging, dragStart, startPos
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X,
+            startPos.Y.Scale, startPos.Y.Offset+d.Y)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+
+local function character()
+    local c = player.Character
+    if not c then return end
+    return c, c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
+end
+
+local function button(label, y, callback)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -24, 0, 35)
+    b.Position = UDim2.fromOffset(12, y)
+    b.BackgroundColor3 = Color3.fromRGB(43, 20, 75)
+    b.TextColor3 = Color3.new(1,1,1)
+    b.Text = label
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 13
+    b.Parent = frame
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    local s = Instance.new("UIStroke", b)
+    s.Color = Color3.fromRGB(125, 50, 220)
+    b.MouseButton1Click:Connect(callback)
+    return b
+end
+
+local function slider(label, y, min, max, initial, callback)
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, -24, 0, 20)
+    txt.Position = UDim2.fromOffset(12, y)
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(220, 190, 255)
+    txt.Font = Enum.Font.Gotham
+    txt.TextSize = 12
+    txt.Text = label .. ": " .. initial
+    txt.Parent = frame
+
+    local bar = Instance.new("TextButton")
+    bar.Size = UDim2.new(1, -24, 0, 12)
+    bar.Position = UDim2.fromOffset(12, y+23)
+    bar.Text = ""
+    bar.BackgroundColor3 = Color3.fromRGB(65, 40, 95)
+    bar.Parent = frame
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(1,0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((initial-min)/(max-min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
+    fill.Parent = bar
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+
+    local function setFromX(x)
+        local a = math.clamp((x-bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
+        local value = math.floor(min+a*(max-min))
+        fill.Size = UDim2.new(a,0,1,0)
+        txt.Text = label .. ": " .. value
+        callback(value)
+    end
+    bar.MouseButton1Down:Connect(function()
+        setFromX(mouse.X)
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            if bar:IsDescendantOf(gui) then setFromX(mouse.X) end
+        end
+    end)
+end
+
+button("📍 SAVE POSITION", 52, function()
+    local _, root = character()
+    if root then
+        table.insert(saved, root.CFrame)
+        print("Saved location #" .. #saved)
+    end
+end)
+
+button("↩ TELEPORT TO LAST SAVE", 93, function()
+    local _, root = character()
+    if root and #saved > 0 then
+        root.CFrame = saved[#saved] + Vector3.new(0,3,0)
+    end
+end)
+
+button("🕊 FLY: OFF", 134, function()
+    flying = not flying
+end)
+
+button("⚡ SPEED BOOST: OFF", 175, function()
+    boosted = not boosted
+    local _, _, hum = character()
+    if hum then hum.WalkSpeed = boosted and walkSpeed or 16 end
+end)
+
+button("🎯 CLICK TELEPORT: OFF", 216, function()
+    tpOn = not tpOn
+end)
+
+button("👁 PLAYER ESP: OFF", 257, function()
+    espOn = not espOn
+    for _, h in pairs(highlights) do h:Destroy() end
+    table.clear(highlights)
+    if espOn then
+        for _, target in ipairs(Players:GetPlayers()) do
+            if target ~= player and target.Character then
+                local h = Instance.new("Highlight")
+                h.Adornee = target.Character
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                h.FillColor = Color3.fromRGB(155,0,255)
+                h.Parent = gui
+                highlights[target] = h
+            end
+        end
+    end
+end)
+
+local playerBox = Instance.new("TextBox")
+playerBox.Size = UDim2.new(1,-24,0,32)
+playerBox.Position = UDim2.fromOffset(12,302)
+playerBox.PlaceholderText = "Type exact player username..."
+playerBox.Text = ""
+playerBox.TextColor3 = Color3.new(1,1,1)
+playerBox.BackgroundColor3 = Color3.fromRGB(35,20,55)
+playerBox.Parent = frame
+Instance.new("UICorner", playerBox)
+
+button("🔎 SELECT PLAYER", 340, function()
+    selectedPlayer = Players:FindFirstChild(playerBox.Text)
+    if selectedPlayer then
+        print("Selected: " .. selectedPlayer.Name)
+    else
+        print("Player not found")
+    end
+end)
+
+button("🌀 SPIN TEST: OFF", 381, function()
+    spinning = not spinning
+end)
+
+slider("FLY SPEED", 425, 20, 150, 60, function(v) flySpeed = v end)
+
+close.MouseButton1Click:Connect(function()
+    flying, boosted, spinning, tpOn = false, false, false, false
+    local _, root, hum = character()
+    if root then
+        for _, n in ipairs({"OverlordVelocity","OverlordGyro"}) do
+            local obj = root:FindFirstChild(n)
+            if obj then obj:Destroy() end
+        end
+    end
+    if hum then hum.WalkSpeed = 16 end
+    for _, h in pairs(highlights) do h:Destroy() end
+    gui:Destroy()
+end)
+
+mouse.Button1Down:Connect(function()
+    if tpOn then
+        local _, root = character()
+        if root then root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,4,0)) end
+    end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    local _, root = character()
+    if not root then return end
+
+    if flying then
+        local bv = root:FindFirstChild("OverlordVelocity")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "OverlordVelocity"
+            bv.MaxForce = Vector3.new(1e6,1e6,1e6)
+            bv.Parent = root
+        end
+        local bg = root:FindFirstChild("OverlordGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "OverlordGyro"
+            bg.MaxTorque = Vector3.new(1e6,1e6,1e6)
+            bg.Parent = root
+        end
+
+        local cam = workspace.CurrentCamera
+        local dir = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.yAxis end
+
+        bv.Velocity = dir.Magnitude > 0 and dir.Unit*flySpeed or Vector3.zero
+        bg.CFrame = cam.CFrame
+    else
+        local bv = root:FindFirstChild("OverlordVelocity")
+        local bg = root:FindFirstChild("OverlordGyro")
+        if bv then bv:Destroy() end
+        if bg then bg:Destroy() end
+    end
+
+    if spinning then
+        angle += dt * 25
+        root.CFrame = root.CFrame * CFrame.Angles(0, angle, 0)
+    end
+end)
+
+print("NEON OVERLORD X LOADED")
